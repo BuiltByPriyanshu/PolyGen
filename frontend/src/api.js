@@ -1,7 +1,9 @@
 // All backend communication lives here. Components never call fetch directly.
+// Contract: see API_CONTRACT.md at the repo root.
 // Job statuses: "queued" | "processing" | "completed" | "failed"
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+const API_BASE = "/api/v1";
 const MOCK_ASSET_URL =
   import.meta.env.VITE_MOCK_ASSET_URL ||
   "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb";
@@ -9,6 +11,17 @@ const MOCK_ASSET_URL =
 export const isMockMode = USE_MOCK;
 
 // ---------------------------------------------------------------- real API
+// Accept camelCase or snake_case so the UI works with whichever the backend returns.
+function normalizeJob(data) {
+  return {
+    jobId: data.jobId ?? data.job_id,
+    status: data.status,
+    assetUrl: data.assetUrl ?? data.asset_url ?? null,
+    error: data.error ?? null,
+    metadata: data.metadata ?? null,
+  };
+}
+
 async function request(path, options) {
   let res;
   try {
@@ -24,19 +37,19 @@ async function request(path, options) {
     } catch {
       /* response had no JSON body */
     }
-    throw new Error(detail || `The server returned an error (${res.status}).`);
+    throw new Error(typeof detail === "string" && detail ? detail : `The server returned an error (${res.status}).`);
   }
-  return res.json();
+  return normalizeJob(await res.json());
 }
 
 const realApi = {
   createJob: (prompt) =>
-    request("/api/jobs", {
+    request(`${API_BASE}/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
     }),
-  getJob: (jobId) => request(`/api/jobs/${encodeURIComponent(jobId)}`),
+  getJob: (jobId) => request(`${API_BASE}/jobs/${encodeURIComponent(jobId)}`),
 };
 
 // ---------------------------------------------------------------- mock API
