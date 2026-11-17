@@ -4,9 +4,8 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-
+from mesh_validator import validate_mesh
 import torch
-
 from shap_e.diffusion.sample import sample_latents
 from shap_e.diffusion.gaussian_diffusion import diffusion_from_config
 from shap_e.models.download import load_model, load_config
@@ -104,7 +103,7 @@ def generate(
 
         print("[3/5] Generating 3D latent...")
 
-        with torch.no_mode():
+        with torch.no_grad():
             latents = sample_latents(
                 batch_size=1,
                 model=model,
@@ -127,7 +126,8 @@ def generate(
                 transmitter,
                 latents[0],
             ).tri_mesh()
-
+            validation = validate_mesh(mesh)
+            print(f"Mesh validation: {validation}")
             print("[5/5] Exporting 3D assets...")
 
             with open(obj_path, "w", encoding="utf-8") as file:
