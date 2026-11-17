@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { validatePrompt, MAX_PROMPT } from "../validation.js";
+import { validatePrompt, MAX_PROMPT } from "../services/validation.js";
 
 const EXAMPLES = [
   "A low-poly red sports car with black wheels",
