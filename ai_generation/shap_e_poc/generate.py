@@ -4,8 +4,12 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from mesh_validator import validate_mesh
+from shap_e.rendering.torch_mesh import TriMesh
 import torch
+
+from mesh_validator import validate_mesh
+from mesh_optimizer import optimize_mesh
+
 from shap_e.diffusion.sample import sample_latents
 from shap_e.diffusion.gaussian_diffusion import diffusion_from_config
 from shap_e.models.download import load_model, load_config
@@ -54,7 +58,7 @@ def generate(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%f")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     asset_name = f"shap_e_{timestamp}_{seed}"
 
     obj_path = output_dir / f"{asset_name}.obj"
@@ -78,7 +82,7 @@ def generate(
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
 
-        print("[1/5] Loading transmitter model...")
+        print("[1/6] Loading transmitter model...")
 
         transmitter = load_model(
             "transmitter",
@@ -86,7 +90,7 @@ def generate(
             cache_dir=str(CACHE_DIR),
         )
 
-        print("[2/5] Loading text diffusion model...")
+        print("[2/6] Loading text diffusion model...")
 
         model = load_model(
             "text300M",
@@ -101,7 +105,7 @@ def generate(
             )
         )
 
-        print("[3/5] Generating 3D latent...")
+        print("[3/6] Generating 3D latent...")
 
         with torch.no_grad():
             latents = sample_latents(
@@ -120,15 +124,34 @@ def generate(
                 s_churn=0,
             )
 
-            print("[4/5] Decoding 3D mesh...")
+            print("[4/6] Decoding 3D mesh...")
 
             mesh = decode_latent_mesh(
                 transmitter,
                 latents[0],
             ).tri_mesh()
+
             validation = validate_mesh(mesh)
-            print(f"Mesh validation: {validation}")
-            print("[5/5] Exporting 3D assets...")
+            print(f"Initial mesh validation: {validation}")
+
+            print("[5/6] Optimizing mesh geometry...")
+
+            optimized = optimize_mesh(mesh)
+
+            mesh = TriMesh(
+            verts=optimized["vertices"],
+            faces=optimized["faces"],
+)
+
+            quality_report = optimized["quality_report"]
+
+            # Validate the optimized mesh before export.
+            optimized_validation = validate_mesh(mesh)
+
+            print(f"Optimization report: {quality_report}")
+            print(f"Final mesh validation: {optimized_validation}")
+
+            print("[6/6] Exporting optimized 3D assets...")
 
             with open(obj_path, "w", encoding="utf-8") as file:
                 mesh.write_obj(file)
@@ -160,6 +183,8 @@ def generate(
             "generated_at": datetime.now(
                 timezone.utc
             ).isoformat(),
+            "mesh_quality": quality_report,
+            "final_validation": optimized_validation,
             "files": {
                 "obj": obj_path.name,
                 "ply": ply_path.name,
@@ -188,6 +213,7 @@ def generate(
 
         print("\nGPU OUT OF MEMORY")
         print("Try CPU mode or reduce diffusion steps.")
+
         raise RuntimeError(
             "Shap-E generation exceeded available GPU memory."
         ) from error
