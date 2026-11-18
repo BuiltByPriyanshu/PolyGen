@@ -1,22 +1,18 @@
-import uuid
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.schemas import (
-    ErrorDetail,
-    JobCreateRequest,
-    JobResponse,
-    JobStatus,
-)
+from app.config import settings
+from app.routers.jobs import router as jobs_router
+from app.schemas import ErrorDetail, JobResponse, JobStatus
 
 app = FastAPI(
     title="PolyGen Orchestration Backend",
-    version="0.1.0",
+    version="0.2.0",
     description="Backend API and job orchestration for PolyGen Text-to-3D pipeline",
 )
 
@@ -28,52 +24,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure storage directory exists and mount static route for .glb asset delivery
-STORAGE_DIR = Path(__file__).resolve().parents[2] / "storage" / "assets"
-STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/assets", StaticFiles(directory=str(STORAGE_DIR)), name="assets")
 
-# In-memory job store for Day 1 thin PoC
-JOBS_DB: Dict[str, JobResponse] = {}
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_response = JobResponse(
+        job_id="unassigned",
+        status=JobStatus.FAILED,
+        created_at=datetime.now(timezone.utc),
+        result=None,
+        error=ErrorDetail(
+            code="INVALID_PROMPT",
+            message="Prompt is empty, malformed, or contains unsupported generation options.",
+        ),
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=error_response.model_dump(mode="json"),
+    )
+
+
+app.mount("/assets", StaticFiles(directory=str(settings.storage_path)), name="assets")
+app.include_router(jobs_router)
 
 
 @app.get("/health", tags=["System"])
 def health_check():
-    return {"status": "ok", "service": "polygen-backend"}
-
-
-@app.post(
-    "/api/v1/jobs",
-    response_model=JobResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    tags=["Jobs"],
-)
-def create_job(payload: JobCreateRequest):
-    job_id = f"job_{uuid.uuid4().hex[:12]}"
-    job = JobResponse(
-        job_id=job_id,
-        status=JobStatus.QUEUED,
-        created_at=datetime.now(timezone.utc),
-        result=None,
-        error=None,
-    )
-    JOBS_DB[job_id] = job
-    return job
-
-
-@app.get(
-    "/api/v1/jobs/{job_id}",
-    response_model=JobResponse,
-    tags=["Jobs"],
-)
-def get_job_status(job_id: str):
-    job = JOBS_DB.get(job_id)
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorDetail(
-                code="JOB_NOT_FOUND",
-                message=f"No generation job found for ID '{job_id}'.",
-            ).model_dump(),
-        )
-    return job
+    return {
+        "status": "ok",
+        "service": "polygen-backend",
+        "env": settings.app_env,
+    }

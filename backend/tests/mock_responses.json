@@ -1,0 +1,42 @@
+{
+  "queued": {
+    "job_id": "job_9f8e7d6c5b4a",
+    "status": "queued",
+    "created_at": "2026-11-18T18:00:00Z",
+    "result": null,
+    "error": null
+  },
+  "processing": {
+    "job_id": "job_9f8e7d6c5b4a",
+    "status": "processing",
+    "created_at": "2026-11-18T18:00:00Z",
+    "result": null,
+    "error": null
+  },
+  "completed": {
+    "job_id": "job_9f8e7d6c5b4a",
+    "status": "completed",
+    "created_at": "2026-11-18T18:00:00Z",
+    "result": {
+      "asset_url": "/assets/job_9f8e7d6c5b4a.glb",
+      "filename": "job_9f8e7d6c5b4a.glb",
+      "format": "glb",
+      "file_size_bytes": 2458120,
+      "metadata": {
+        "polycount": 9840,
+        "has_textures": true
+      }
+    },
+    "error": null
+  },
+  "failed": {
+    "job_id": "job_9f8e7d6c5b4a",
+    "status": "failed",
+    "created_at": "2026-11-18T18:00:00Z",
+    "result": null,
+    "error": {
+      "code": "GENERATION_TIMEOUT",
+      "message": "3D asset generation exceeded the allowed time limit. Please try again."
+    }
+  }
+}
