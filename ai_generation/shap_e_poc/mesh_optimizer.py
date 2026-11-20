@@ -1,3 +1,4 @@
+
 import numpy as np
 from collections import Counter
 
@@ -9,14 +10,29 @@ def optimize_mesh(mesh):
     """
 
     vertices = np.asarray(mesh.verts, dtype=np.float64)
-    faces = np.asarray(mesh.faces, dtype=np.int64)
+    raw_faces = np.asarray(mesh.faces)
 
+    # Validate vertex dimensions.
     if vertices.ndim != 2 or vertices.shape[1] != 3:
         raise ValueError("Invalid vertex dimensions.")
 
-    if faces.ndim != 2 or faces.shape[1] != 3:
+    # Validate face dimensions.
+    if raw_faces.ndim != 2 or raw_faces.shape[1] != 3:
         raise ValueError("Invalid face dimensions.")
 
+    # Validate face indices before integer conversion.
+    if not np.issubdtype(raw_faces.dtype, np.number):
+        raise ValueError("Face indices must be numeric.")
+
+    if not np.isfinite(raw_faces).all():
+        raise ValueError("Face indices contain non-finite values.")
+
+    if not np.equal(raw_faces, np.floor(raw_faces)).all():
+        raise ValueError("Face indices must be integers.")
+
+    faces = raw_faces.astype(np.int64)
+
+    # Validate vertex coordinates.
     if not np.isfinite(vertices).all():
         raise ValueError("Mesh contains non-finite coordinates.")
 
@@ -87,6 +103,7 @@ def optimize_mesh(mesh):
     # Calculate surface area.
     a = vertices[faces[:, 1]] - vertices[faces[:, 0]]
     b = vertices[faces[:, 2]] - vertices[faces[:, 0]]
+
     surface_area = float(
         np.sum(0.5 * np.linalg.norm(np.cross(a, b), axis=1))
     )
