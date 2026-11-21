@@ -105,3 +105,40 @@ def test_non_finite_face_indices_are_rejected():
 
     with pytest.raises(ValueError, match="non-finite"):
         optimize_mesh(mesh)
+
+def test_single_triangle_has_three_boundary_edges():
+    mesh = create_mesh(
+        [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+        [[0, 1, 2]]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["total_edges"] == 3
+    assert report["boundary_edges"] == 3
+    assert report["manifold_edges"] == 0
+    assert report["non_manifold_edges"] == 0
+
+
+def test_two_triangles_sharing_an_edge_have_one_manifold_edge():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0]
+        ],
+        [
+            [0, 1, 2],
+            [1, 3, 2]
+        ]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["total_edges"] == 5
+    assert report["boundary_edges"] == 4
+    assert report["manifold_edges"] == 1
+    assert report["non_manifold_edges"] == 0

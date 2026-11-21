@@ -85,20 +85,32 @@ def optimize_mesh(mesh):
     )
     vertices = vertices[used_vertices]
     faces = inverse.reshape(-1, 3)
-
-    # Count edges to identify non-manifold edges.
+    # Analyse mesh edge topology.
     edges = np.concatenate([
         faces[:, [0, 1]],
         faces[:, [1, 2]],
         faces[:, [2, 0]]
     ])
+
+    # Normalize edge direction so shared edges are counted together.
     edges = np.sort(edges, axis=1)
 
     edge_counts = Counter(map(tuple, edges.tolist()))
 
+    boundary_edges = sum(
+        count == 1 for count in edge_counts.values()
+    )
+
+    manifold_edges = sum(
+        count == 2 for count in edge_counts.values()
+    )
+
     non_manifold_edges = sum(
         count > 2 for count in edge_counts.values()
     )
+
+    total_edges = len(edge_counts)
+
 
     # Calculate surface area.
     a = vertices[faces[:, 1]] - vertices[faces[:, 0]]
@@ -119,6 +131,9 @@ def optimize_mesh(mesh):
             "removed_vertices": int(original_vertices - len(vertices)),
             "removed_faces": int(original_faces - len(faces)),
             "surface_area": surface_area,
+            "total_edges": int(total_edges),
+            "boundary_edges": int(boundary_edges),
+            "manifold_edges": int(manifold_edges),
             "non_manifold_edges": int(non_manifold_edges),
             "optimization_status": "completed"
         }
