@@ -1,21 +1,19 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 from fastapi.responses import JSONResponse
 
 from app.schemas import (
     ErrorDetail,
+    GenerationOptions,
     JobCreateRequest,
     JobResponse,
     JobStatus,
 )
+from app.services.orchestrator import get_job, register_job, run_generation_job
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Jobs"])
-
-# Shared in-memory job registry (replaced by persistent/worker store in Phase 2)
-JOBS_DB: Dict[str, JobResponse] = {}
 
 
 @router.post(
@@ -23,16 +21,17 @@ JOBS_DB: Dict[str, JobResponse] = {}
     response_model=JobResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def create_job(payload: JobCreateRequest):
+def create_job(payload: JobCreateRequest, background_tasks: BackgroundTasks):
     job_id = f"job_{uuid.uuid4().hex[:12]}"
-    job = JobResponse(
-        job_id=job_id,
-        status=JobStatus.QUEUED,
-        created_at=datetime.now(timezone.utc),
-        result=None,
-        error=None,
+    job = register_job(job_id)
+
+    options = payload.options or GenerationOptions()
+    background_tasks.add_task(
+        run_generation_job,
+        job_id,
+        payload.prompt,
+        options,
     )
-    JOBS_DB[job_id] = job
     return job
 
 
@@ -41,7 +40,7 @@ def create_job(payload: JobCreateRequest):
     response_model=JobResponse,
 )
 def get_job_status(job_id: str):
-    job = JOBS_DB.get(job_id)
+    job = get_job(job_id)
     if not job:
         error_payload = JobResponse(
             job_id=job_id,
