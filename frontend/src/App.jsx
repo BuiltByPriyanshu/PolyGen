@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, isMockMode } from "./services/api.js";
+import { addToHistory, loadHistory, saveHistory } from "./services/history.js";
 import PromptPanel from "./components/PromptPanel.jsx";
 import StatusPanel from "./components/StatusPanel.jsx";
+import HistoryPanel from "./components/HistoryPanel.jsx";
 import Viewer from "./components/Viewer.jsx";
 
 const POLL_MS = 2000;
@@ -13,10 +15,13 @@ export default function App() {
   const [startedAt, setStartedAt] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [history, setHistory] = useState(() => loadHistory());
+  const [selected, setSelected] = useState(null); // a history entry being previewed
 
   async function handleSubmit(prompt) {
     setSubmitting(true);
     setSubmitError("");
+    setSelected(null);
     setJob(null);
     try {
       const created = await api.createJob(prompt);
@@ -44,8 +49,31 @@ export default function App() {
     return () => clearInterval(id);
   }, [job?.jobId, job?.status]);
 
+  // Save each completed model to history once.
+  useEffect(() => {
+    if (job?.status !== "completed" || !job.assetUrl) return;
+    if (history.some((item) => item.jobId === job.jobId)) return;
+    const next = addToHistory(history, {
+      jobId: job.jobId,
+      prompt: sentPrompt,
+      assetUrl: job.assetUrl,
+      completedAt: Date.now(),
+      mock: Boolean(job.metadata?.mock),
+    });
+    setHistory(next);
+    saveHistory(next);
+  }, [job?.status, job?.jobId]);
+
+  function handleClearHistory() {
+    setHistory([]);
+    saveHistory([]);
+    setSelected(null);
+  }
+
   const busy = submitting || (job && !TERMINAL.has(job.status));
-  const assetUrl = job?.status === "completed" ? job.assetUrl : null;
+  const currentAsset = job?.status === "completed" ? job.assetUrl : null;
+  const assetUrl = selected ? selected.assetUrl : currentAsset;
+  const activeId = selected ? selected.jobId : currentAsset ? job.jobId : null;
 
   return (
     <div className="app">
@@ -63,6 +91,12 @@ export default function App() {
         <aside className="controls">
           <PromptPanel onSubmit={handleSubmit} busy={busy} submitError={submitError} />
           <StatusPanel job={job} prompt={sentPrompt} startedAt={startedAt} />
+          <HistoryPanel
+            items={history}
+            activeId={activeId}
+            onSelect={setSelected}
+            onClear={handleClearHistory}
+          />
         </aside>
 
         <section className="stage" aria-label="3D preview">
