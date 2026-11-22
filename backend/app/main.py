@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, status
@@ -9,16 +10,26 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.routers.jobs import router as jobs_router
 from app.schemas import ErrorDetail, JobResponse, JobStatus
+from app.services.job_store import job_store
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Mark any stale jobs interrupted by a prior restart as failed on startup
+    job_store.recover_interrupted_jobs()
+    yield
+
 
 app = FastAPI(
     title="PolyGen Orchestration Backend",
-    version="0.2.0",
+    version="0.3.0",
     description="Backend API and job orchestration for PolyGen Text-to-3D pipeline",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
