@@ -142,3 +142,48 @@ def test_two_triangles_sharing_an_edge_have_one_manifold_edge():
     assert report["boundary_edges"] == 4
     assert report["manifold_edges"] == 1
     assert report["non_manifold_edges"] == 0
+
+def test_connected_mesh_has_one_component():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0]
+        ],
+        [
+            [0, 1, 2],
+            [1, 3, 2]
+        ]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["connected_components"] == 1
+    assert report["largest_component_faces"] == 2
+    assert report["isolated_components"] == 0
+
+
+def test_disconnected_mesh_has_two_components():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [3, 0, 0],
+            [4, 0, 0],
+            [3, 1, 0]
+        ],
+        [
+            [0, 1, 2],
+            [3, 4, 5]
+        ]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["connected_components"] == 2
+    assert report["largest_component_faces"] == 1
+    assert report["isolated_components"] == 2

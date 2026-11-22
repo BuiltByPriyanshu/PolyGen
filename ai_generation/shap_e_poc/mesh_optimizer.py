@@ -6,7 +6,9 @@ from collections import Counter
 def optimize_mesh(mesh):
     """
     Analyse and clean a triangular mesh.
-    Returns cleaned vertices, faces and quality statistics.
+
+    Removes duplicate vertices, duplicate faces and degenerate
+    triangles. Reports edge topology and connected components.
     """
 
     vertices = np.asarray(mesh.verts, dtype=np.float64)
@@ -85,6 +87,7 @@ def optimize_mesh(mesh):
     )
     vertices = vertices[used_vertices]
     faces = inverse.reshape(-1, 3)
+
     # Analyse mesh edge topology.
     edges = np.concatenate([
         faces[:, [0, 1]],
@@ -92,9 +95,7 @@ def optimize_mesh(mesh):
         faces[:, [2, 0]]
     ])
 
-    # Normalize edge direction so shared edges are counted together.
     edges = np.sort(edges, axis=1)
-
     edge_counts = Counter(map(tuple, edges.tolist()))
 
     boundary_edges = sum(
@@ -111,6 +112,56 @@ def optimize_mesh(mesh):
 
     total_edges = len(edge_counts)
 
+    # Calculate connected components using shared edges.
+    parent = list(range(len(faces)))
+    rank = [0] * len(faces)
+
+    def find(node):
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    def union(first, second):
+        root_first = find(first)
+        root_second = find(second)
+
+        if root_first == root_second:
+            return
+
+        if rank[root_first] < rank[root_second]:
+            root_first, root_second = root_second, root_first
+
+        parent[root_second] = root_first
+
+        if rank[root_first] == rank[root_second]:
+            rank[root_first] += 1
+
+    edge_to_face = {}
+
+    for face_index, face in enumerate(faces):
+        face_edges = [
+            tuple(sorted((int(face[0]), int(face[1])))),
+            tuple(sorted((int(face[1]), int(face[2])))),
+            tuple(sorted((int(face[2]), int(face[0]))))
+        ]
+
+        for edge in face_edges:
+            if edge in edge_to_face:
+                union(face_index, edge_to_face[edge])
+            else:
+                edge_to_face[edge] = face_index
+
+    component_sizes = Counter(
+        find(face_index) for face_index in range(len(faces))
+    )
+
+    connected_components = len(component_sizes)
+    largest_component_faces = max(component_sizes.values())
+
+    isolated_components = sum(
+        size == 1 for size in component_sizes.values()
+    )
 
     # Calculate surface area.
     a = vertices[faces[:, 1]] - vertices[faces[:, 0]]
@@ -135,6 +186,9 @@ def optimize_mesh(mesh):
             "boundary_edges": int(boundary_edges),
             "manifold_edges": int(manifold_edges),
             "non_manifold_edges": int(non_manifold_edges),
+            "connected_components": int(connected_components),
+            "largest_component_faces": int(largest_component_faces),
+            "isolated_components": int(isolated_components),
             "optimization_status": "completed"
         }
     }
