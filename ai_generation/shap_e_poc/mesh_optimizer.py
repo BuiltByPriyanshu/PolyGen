@@ -8,7 +8,8 @@ def optimize_mesh(mesh):
     Analyse and clean a triangular mesh.
 
     Removes duplicate vertices, duplicate faces and degenerate
-    triangles. Reports edge topology and connected components.
+    triangles. Reports edge topology, connected components,
+    and isolated vertex statistics.
     """
 
     vertices = np.asarray(mesh.verts, dtype=np.float64)
@@ -46,6 +47,17 @@ def optimize_mesh(mesh):
 
     original_vertices = len(vertices)
     original_faces = len(faces)
+
+    # Count isolated vertices before optimization.
+    referenced_vertices = np.unique(faces.flatten())
+
+    isolated_vertices_before = (
+        original_vertices - len(referenced_vertices)
+    )
+
+    isolated_vertex_percentage = (
+        isolated_vertices_before / original_vertices
+    ) * 100.0
 
     # Remove duplicate vertices.
     unique_vertices, inverse = np.unique(
@@ -87,6 +99,11 @@ def optimize_mesh(mesh):
     )
     vertices = vertices[used_vertices]
     faces = inverse.reshape(-1, 3)
+
+    # Count isolated vertices after cleanup.
+    isolated_vertices_after = len(vertices) - len(
+        np.unique(faces.flatten())
+    )
 
     # Analyse mesh edge topology.
     edges = np.concatenate([
@@ -181,6 +198,15 @@ def optimize_mesh(mesh):
             "optimized_faces": int(len(faces)),
             "removed_vertices": int(original_vertices - len(vertices)),
             "removed_faces": int(original_faces - len(faces)),
+            "isolated_vertices_before_cleanup": int(
+                isolated_vertices_before
+            ),
+            "isolated_vertex_percentage": float(
+                isolated_vertex_percentage
+            ),
+            "isolated_vertices_after_cleanup": int(
+                isolated_vertices_after
+            ),
             "surface_area": surface_area,
             "total_edges": int(total_edges),
             "boundary_edges": int(boundary_edges),

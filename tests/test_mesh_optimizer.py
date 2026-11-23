@@ -187,3 +187,40 @@ def test_disconnected_mesh_has_two_components():
     assert report["connected_components"] == 2
     assert report["largest_component_faces"] == 1
     assert report["isolated_components"] == 2
+
+def test_isolated_vertices_are_detected_before_cleanup():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [5, 5, 5]
+        ],
+        [[0, 1, 2]]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["isolated_vertices_before_cleanup"] == 1
+    assert report["isolated_vertex_percentage"] == 25.0
+    assert report["isolated_vertices_after_cleanup"] == 0
+    assert len(result["vertices"]) == 3
+
+
+def test_mesh_without_isolated_vertices_reports_zero():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0]
+        ],
+        [[0, 1, 2]]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["isolated_vertices_before_cleanup"] == 0
+    assert report["isolated_vertex_percentage"] == 0.0
+    assert report["isolated_vertices_after_cleanup"] == 0
