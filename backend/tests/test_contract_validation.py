@@ -32,7 +32,7 @@ def test_reject_blank_prompt_with_contract_error():
 
 
 def test_get_unknown_job_returns_404_contract_error():
-    res = client.get("/api/v1/jobs/job_doesnotexist")
+    res = client.get("/api/v1/jobs/job_000000000000")
     assert res.status_code == 404
     data = res.json()
     assert data["status"] == "failed"
