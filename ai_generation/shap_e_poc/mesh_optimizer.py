@@ -3,14 +3,22 @@ import numpy as np
 from collections import Counter
 
 
-def optimize_mesh(mesh):
+def optimize_mesh(mesh, aspect_ratio_threshold=10.0):
     """
     Analyse and clean a triangular mesh.
 
     Removes duplicate vertices, duplicate faces and degenerate
     triangles. Reports edge topology, connected components,
-    and isolated vertex statistics.
+    isolated vertices and triangle aspect ratios.
     """
+
+    # Validate aspect-ratio threshold.
+    if (
+        not np.isscalar(aspect_ratio_threshold)
+        or not np.isfinite(aspect_ratio_threshold)
+        or aspect_ratio_threshold <= 0
+    ):
+        raise ValueError("Aspect ratio threshold must be positive and finite.")
 
     vertices = np.asarray(mesh.verts, dtype=np.float64)
     raw_faces = np.asarray(mesh.faces)
@@ -158,10 +166,10 @@ def optimize_mesh(mesh):
 
     for face_index, face in enumerate(faces):
         face_edges = [
-            tuple(sorted((int(face[0]), int(face[1])))),
-            tuple(sorted((int(face[1]), int(face[2])))),
-            tuple(sorted((int(face[2]), int(face[0]))))
-        ]
+    tuple(sorted((int(face[0]), int(face[1])))),
+    tuple(sorted((int(face[1]), int(face[2])))),
+    tuple(sorted((int(face[2]), int(face[0])))),
+]
 
         for edge in face_edges:
             if edge in edge_to_face:
@@ -180,13 +188,57 @@ def optimize_mesh(mesh):
         size == 1 for size in component_sizes.values()
     )
 
-    # Calculate surface area.
-    a = vertices[faces[:, 1]] - vertices[faces[:, 0]]
-    b = vertices[faces[:, 2]] - vertices[faces[:, 0]]
+    # Calculate triangle aspect ratios.
+    triangles = vertices[faces]
 
-    surface_area = float(
-        np.sum(0.5 * np.linalg.norm(np.cross(a, b), axis=1))
+    edge_01 = np.linalg.norm(
+        triangles[:, 1] - triangles[:, 0], axis=1
     )
+    edge_12 = np.linalg.norm(
+        triangles[:, 2] - triangles[:, 1], axis=1
+    )
+    edge_20 = np.linalg.norm(
+        triangles[:, 0] - triangles[:, 2], axis=1
+    )
+
+    longest_edges = np.maximum.reduce([
+        edge_01, edge_12, edge_20
+    ])
+
+    twice_areas = np.linalg.norm(
+        np.cross(
+            triangles[:, 1] - triangles[:, 0],
+            triangles[:, 2] - triangles[:, 0]
+        ),
+        axis=1
+    )
+
+    # Longest edge divided by altitude to that edge.
+    triangle_aspect_ratios = np.divide(
+        longest_edges ** 2,
+        twice_areas,
+        out=np.full(len(faces), np.inf),
+        where=twice_areas > 0
+    )
+
+    average_aspect_ratio = float(
+        np.mean(triangle_aspect_ratios)
+    )
+
+    maximum_aspect_ratio = float(
+        np.max(triangle_aspect_ratios)
+    )
+
+    poorly_shaped_triangles = int(
+        np.sum(triangle_aspect_ratios > aspect_ratio_threshold)
+    )
+
+    poorly_shaped_percentage = (
+        poorly_shaped_triangles / len(faces)
+    ) * 100.0
+
+    # Calculate surface area.
+    surface_area = float(np.sum(twice_areas) * 0.5)
 
     return {
         "vertices": vertices,
@@ -215,6 +267,13 @@ def optimize_mesh(mesh):
             "connected_components": int(connected_components),
             "largest_component_faces": int(largest_component_faces),
             "isolated_components": int(isolated_components),
+            "average_triangle_aspect_ratio": average_aspect_ratio,
+            "maximum_triangle_aspect_ratio": maximum_aspect_ratio,
+            "poorly_shaped_triangles": poorly_shaped_triangles,
+            "poorly_shaped_triangle_percentage": float(
+                poorly_shaped_percentage
+            ),
+            "aspect_ratio_threshold": float(aspect_ratio_threshold),
             "optimization_status": "completed"
         }
     }

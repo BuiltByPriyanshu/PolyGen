@@ -224,3 +224,39 @@ def test_mesh_without_isolated_vertices_reports_zero():
     assert report["isolated_vertices_before_cleanup"] == 0
     assert report["isolated_vertex_percentage"] == 0.0
     assert report["isolated_vertices_after_cleanup"] == 0
+
+def test_equilateral_triangle_has_low_aspect_ratio():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0.5, np.sqrt(3) / 2, 0]
+        ],
+        [[0, 1, 2]]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["average_triangle_aspect_ratio"] == pytest.approx(
+        2 / np.sqrt(3)
+    )
+    assert report["poorly_shaped_triangles"] == 0
+
+
+def test_elongated_triangle_is_flagged():
+    mesh = create_mesh(
+        [
+            [0, 0, 0],
+            [10, 0, 0],
+            [0, 0.1, 0]
+        ],
+        [[0, 1, 2]]
+    )
+
+    result = optimize_mesh(mesh)
+    report = result["quality_report"]
+
+    assert report["maximum_triangle_aspect_ratio"] > 10
+    assert report["poorly_shaped_triangles"] == 1
+    assert report["poorly_shaped_triangle_percentage"] == 100.0
