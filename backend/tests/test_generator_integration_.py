@@ -21,14 +21,19 @@ def test_adapter_invokes_member2_generator_module(monkeypatch):
         captured_payload.update(payload)
         out = Path(payload["output_path"])
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(struct.pack("<4sII", b"glTF", 2, 12))
+        json_bytes = b'{"asset":{"version":"2.0"}}   '
+        total_len = 12 + 8 + len(json_bytes)
+        out.write_bytes(
+            struct.pack("<4sII", b"glTF", 2, total_len)
+            + struct.pack("<II", len(json_bytes), 0x4E4F534A)
+            + json_bytes
+        )
         return {
             "success": True,
             "output_path": str(out),
             "format": "glb",
             "metadata": {"polycount": 4200, "has_textures": True},
         }
-
     fake_interface_mod.generate_3d_asset = mock_generate_3d_asset
     monkeypatch.setitem(sys.modules, "generator", fake_generator_pkg)
     monkeypatch.setitem(sys.modules, "generator.interface", fake_interface_mod)
