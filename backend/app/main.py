@@ -65,3 +65,45 @@ def health_check():
         "service": "polygen-backend",
         "env": settings.app_env,
     }
+
+
+@app.get("/ready", tags=["System"])
+def readiness_check():
+    """Verifies storage writability, database connectivity, and generator module status."""
+    storage_ok = False
+    db_ok = False
+    generator_linked = False
+
+    try:
+        probe_file = settings.storage_path / ".write_probe"
+        probe_file.write_text("ok", encoding="utf-8")
+        probe_file.unlink()
+        storage_ok = True
+    except OSError:
+        storage_ok = False
+
+    try:
+        job_store.list_recent(limit=1)
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    try:
+        import importlib
+        importlib.import_module("generator.interface")
+        generator_linked = True
+    except ImportError:
+        generator_linked = False
+
+    ready = storage_ok and db_ok
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "ready" if ready else "degraded",
+            "checks": {
+                "storage_writable": storage_ok,
+                "database_connected": db_ok,
+                "generator_module_linked": generator_linked,
+            },
+        },
+    )
